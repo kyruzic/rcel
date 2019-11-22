@@ -1,18 +1,22 @@
-use std::error::Error;
-use std::process;
-use std::io;
-use tui::Terminal;
-use tui::backend::TermionBackend;
-use termion::raw::IntoRawMode;
-use tui::widgets::{Widget, Block, Borders};
-use tui::layout::{Layout, Constraint, Direction};
-use tui::Frame;
-use tui::backend::Backend;
+mod events;
 
+use std::error::Error;
+use std::io;
+use std::process;
+use termion::event::Key;
+use termion::input::TermRead;
+use termion::raw::IntoRawMode;
+use tui::backend::{Backend, TermionBackend};
+use tui::layout::{Constraint, Direction, Layout};
+use tui::style::{Color, Style};
+use tui::widgets::{Block, Borders, Widget};
+use tui::{Frame, Terminal};
+
+use events::{Event, Events};
 
 fn return_csv_headers() -> Vec<String> {
     // Build the CSV reader and iterate over each record.
-    let mut rdr = csv::Reader::from_path("/home/kyle/datafiles/csvTest/uspop.csv").unwrap();
+    let mut rdr = csv::Reader::from_path("./assets/uspop.csv").unwrap();
     let headers = rdr.headers().unwrap();
     headers.iter().map(|x| x.to_string()).collect()
 }
@@ -22,7 +26,7 @@ where
     B: Backend,
 {
     let headers = return_csv_headers();
-    let width = 100/headers.len() as u16;
+    let width = 100 / headers.len() as u16;
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .margin(1)
@@ -32,38 +36,56 @@ where
                 Constraint::Percentage(width),
                 Constraint::Percentage(width),
                 Constraint::Percentage(width),
-                Constraint::Percentage(width)
-            ].as_ref()
+                Constraint::Percentage(width),
+            ]
+            .as_ref(),
         )
         .split(f.size());
     Block::default()
         .title(&headers[0])
-        .borders(Borders::ALL)
+        .title_style(Style::default().fg(Color::Red))
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .render(f, chunks[0]);
     Block::default()
         .title(&headers[1])
-        .borders(Borders::ALL)
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .render(f, chunks[1]);
     Block::default()
         .title(&headers[2])
-        .borders(Borders::ALL)
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .render(f, chunks[2]);
     Block::default()
         .title(&headers[3])
-        .borders(Borders::ALL)
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .render(f, chunks[3]);
     Block::default()
         .title(&headers[4])
-        .borders(Borders::ALL)
+        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .render(f, chunks[4]);
 }
 
-fn main() -> Result<(), io::Error>{
-    let stdout = io::stdout().into_raw_mode()?;
+fn main() {
+    let stdout = io::stdout().into_raw_mode().unwrap();
     let backend = TermionBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
-    terminal.clear()?;
-    terminal.draw(|mut f| {
-        draw_headers(&mut f);
-    })
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.clear().unwrap();
+
+    let events = Events::new();
+
+    loop {
+        terminal
+            .draw(|mut f| {
+                draw_headers(&mut f);
+            })
+            .unwrap();
+
+        match events.next().unwrap() {
+            Event::Input(key) => {
+                if key == Key::Ctrl('c') {
+                    break;
+                }
+            }
+            Event::Tick => {}
+        }
+    }
 }
