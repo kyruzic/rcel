@@ -1,0 +1,12 @@
+[package]
+name = "rcel"
+version = "0.1.0"
+authors = ["Kyle Ruzic <kyruzic@gmail.com>", "Kristopher Ruzic <krruzic@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+csv = "1.1.1"
+redis = "0.13.0"
+termion = "1.5.3"
