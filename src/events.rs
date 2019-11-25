@@ -63,7 +63,6 @@ impl Events {
                 }
             })
         };
-
         Events { rx }
     }
 

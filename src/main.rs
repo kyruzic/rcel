@@ -1,65 +1,59 @@
 mod events;
+mod csv_utils;
 
 use std::error::Error;
 use std::io;
 use std::process;
+use std::iter;
+use std::collections::HashMap;
 use termion::event::Key;
 use termion::input::TermRead;
 use termion::raw::IntoRawMode;
 use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Direction, Layout};
-use tui::style::{Color, Style};
+use tui::style::{Color, Modifier, Style};
 use tui::widgets::{Block, Borders, Widget};
 use tui::{Frame, Terminal};
 
 use events::{Event, Events};
 
-fn return_csv_headers() -> Vec<String> {
-    // Build the CSV reader and iterate over each record.
-    let mut rdr = csv::Reader::from_path("./assets/uspop.csv").unwrap();
-    let headers = rdr.headers().unwrap();
-    headers.iter().map(|x| x.to_string()).collect()
-}
-
-fn draw_headers<B>(f: &mut Frame<B>)
+fn draw_rows<B>(f: &mut Frame<B>)
 where
     B: Backend,
 {
-    let headers = return_csv_headers();
-    let width = 100 / headers.len() as u16;
+    let columns = csv_utils::read_csv_to_columns().unwrap();
+    let width = 20;
+    let constraints_vec = iter::repeat(width)
+        .take(columns.keys().len())
+        .map(|w| Constraint::Percentage(w))
+        .collect::<Vec<Constraint>>();
+
     let chunks = Layout::default()
         .direction(Direction::Horizontal)
         .margin(1)
         .constraints(
-            [
-                Constraint::Percentage(width),
-                Constraint::Percentage(width),
-                Constraint::Percentage(width),
-                Constraint::Percentage(width),
-                Constraint::Percentage(width),
-            ]
-            .as_ref(),
+            constraints_vec.as_ref(),
         )
         .split(f.size());
+
     Block::default()
-        .title(&headers[0])
-        .title_style(Style::default().fg(Color::Red))
-        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .title(&columns.get("City").unwrap()[0])
+        .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[0]);
     Block::default()
-        .title(&headers[1])
-        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .title(&columns.get("State").unwrap()[0])
+        .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[1]);
     Block::default()
-        .title(&headers[2])
-        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .title(&columns.get("Population").unwrap()[0])
+        .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[2]);
     Block::default()
-        .title(&headers[3])
-        .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
+        .title(&columns.get("Latitude").unwrap()[0])
+        .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[3]);
     Block::default()
-        .title(&headers[4])
+        .title(&columns.get("Longitude").unwrap()[0])
         .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .render(f, chunks[4]);
 }
@@ -75,7 +69,7 @@ fn main() {
     loop {
         terminal
             .draw(|mut f| {
-                draw_headers(&mut f);
+                draw_rows(&mut f);
             })
             .unwrap();
 
@@ -89,3 +83,15 @@ fn main() {
         }
     }
 }
+
+// fn main() {
+//     let mut rdr = csv::Reader::from_path("./assets/uspop.csv").unwrap();
+//     for result in rdr.deserialize() {
+//         let record: HashMap<String, String> = result.unwrap();
+//         println!("{:?}", record)
+//     }
+//     let columns = csv_utils::read_csv_to_columns();
+//     for column in columns  {
+//         println!("{:?}", column)
+//     }
+// }
