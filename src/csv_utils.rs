@@ -1,21 +1,21 @@
 use std::collections::HashMap;
+use csv::StringRecord;
 
-fn return_csv_headers() -> Vec<String> {
+pub fn return_csv_headers() -> Vec<String> {
     // Build the CSV reader and iterate over each record.
     let mut rdr = csv::Reader::from_path("./assets/uspop.csv").unwrap();
     let headers = rdr.headers().unwrap();
     headers.iter().map(|x| x.to_string()).collect()
 }
 
-pub fn read_csv_to_rows() -> Result<HashMap<String, Vec<String>>, csv::Error> {
+pub fn read_csv_to_rows() -> Result<Vec<StringRecord>, csv::Error> {
     let mut rdr = csv::Reader::from_path("./assets/uspop.csv")?;
-    let hashmap = rdr
-        .deserialize()
-        .filter_map(|val| val.ok())
-        .enumerate()
-        .map(|(index, val)| (format!("row {}", index), val))
-        .collect::<HashMap<String, Vec<String>>>();
-    Ok(hashmap)
+    let mut rows = Vec::new();
+    for row in rdr.records() {
+        let record = row?;
+        rows.append(&mut vec![record])
+    }
+    Ok(rows)
 }
 
 pub fn read_csv_to_columns() -> Result<HashMap<String, Vec<String>>, csv::Error>{

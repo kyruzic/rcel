@@ -12,7 +12,7 @@ use termion::raw::IntoRawMode;
 use tui::backend::{Backend, TermionBackend};
 use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Block, Borders, Widget};
+use tui::widgets::{Block, Borders, Widget, Table, Row};
 use tui::{Frame, Terminal};
 
 use events::{Event, Events};
@@ -21,7 +21,18 @@ fn draw_rows<B>(f: &mut Frame<B>)
 where
     B: Backend,
 {
+    // Getting data
     let columns = csv_utils::read_csv_to_columns().unwrap();
+    let csv_rows = csv_utils::read_csv_to_rows().unwrap();
+    let headers = csv_utils::return_csv_headers();
+
+    let row_style = Style::default().fg(Color::Red);
+   
+    let rows = csv_rows.iter().map(|values| {
+        Row::StyledData(values.iter(), row_style)
+    });
+
+    // Rendering data
     let width = 20;
     let constraints_vec = iter::repeat(width)
         .take(columns.keys().len())
@@ -37,25 +48,32 @@ where
         .split(f.size());
 
     Block::default()
-        .title(&columns.get("City").unwrap()[0])
         .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[0]);
     Block::default()
-        .title(&columns.get("State").unwrap()[0])
         .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[1]);
     Block::default()
-        .title(&columns.get("Population").unwrap()[0])
         .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[2]);
     Block::default()
-        .title(&columns.get("Latitude").unwrap()[0])
         .borders(Borders::LEFT | Borders::BOTTOM)
         .render(f, chunks[3]);
     Block::default()
-        .title(&columns.get("Longitude").unwrap()[0])
         .borders(Borders::LEFT | Borders::RIGHT | Borders::BOTTOM)
         .render(f, chunks[4]);
+
+    let size = f.size();
+    Table::new(
+            headers.iter(),
+            rows.into_iter()
+        )
+        .header_style(Style::default().fg(Color::Yellow))
+        .widths(&[20, 20, 20, 20, 20])
+        .style(Style::default().fg(Color::White))
+        .column_spacing(2)
+        .render(f, size);
+
 }
 
 fn main() {
@@ -84,14 +102,3 @@ fn main() {
     }
 }
 
-// fn main() {
-//     let mut rdr = csv::Reader::from_path("./assets/uspop.csv").unwrap();
-//     for result in rdr.deserialize() {
-//         let record: HashMap<String, String> = result.unwrap();
-//         println!("{:?}", record)
-//     }
-//     let columns = csv_utils::read_csv_to_columns();
-//     for column in columns  {
-//         println!("{:?}", column)
-//     }
-// }
