@@ -1,3 +1,17 @@
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::iter::Iterator;
+
+use tui::buffer::Buffer;
+use tui::layout::{Constraint, Rect};
+use tui::style::{Style, Color};
+use tui::symbols::line;
+use tui::widgets::{Block, Widget};
+
+use cassowary::strength::{MEDIUM, REQUIRED, WEAK};
+use cassowary::WeightedRelation::*;
+use cassowary::{Expression, Solver};
+
 /// Holds data to be displayed in a Table widget
 pub enum Row<D, I>
 where
@@ -98,10 +112,6 @@ where
             column_spacing: 1,
         }
     }
-    pub fn block(mut self, block: Block<'a>) -> GriddedTable<'a, T, H, I, D, R> {
-        self.block = Some(block);
-        self
-    }
 
     pub fn header<II>(mut self, header: II) -> GriddedTable<'a, T, H, I, D, R>
     where
@@ -156,15 +166,9 @@ where
     D: Iterator<Item = I>,
     R: Iterator<Item = Row<D, I>>,
 {
-    fn draw(&mut self, area: Rect, buf: &mut Buffer) {
+    fn draw(&mut self, table_area: Rect, buf: &mut Buffer) {
         // Render block if necessary and get the drawing area
-        let table_area = match self.block {
-            Some(ref mut b) => {
-                b.draw(area, buf);
-                b.inner(area)
-            }
-            None => area,
-        };
+
 
         // Set the background
         self.background(table_area, buf, self.style.bg);
@@ -183,10 +187,10 @@ where
             ccs.push(match *constraint {
                 Constraint::Length(v) => variables[i] | EQ(MEDIUM) | f64::from(v),
                 Constraint::Percentage(v) => {
-                    variables[i] | EQ(WEAK) | (f64::from(v * area.width) / 100.0)
+                    variables[i] | EQ(WEAK) | (f64::from(v * table_area.width) / 100.0)
                 }
                 Constraint::Ratio(n, d) => {
-                    variables[i] | EQ(WEAK) | (f64::from(area.width) * f64::from(n) / f64::from(d))
+                    variables[i] | EQ(WEAK) | (f64::from(table_area.width) * f64::from(n) / f64::from(d))
                 }
                 Constraint::Min(v) => variables[i] | GE(WEAK) | f64::from(v),
                 Constraint::Max(v) => variables[i] | LE(WEAK) | f64::from(v),
@@ -199,11 +203,13 @@ where
                     .fold(Expression::from_constant(0.), |acc, v| acc + *v)
                     | LE(REQUIRED)
                     | f64::from(
-                        area.width - 2 - (self.column_spacing * (variables.len() as u16 - 1)),
+                        table_area.width - 2 - (self.column_spacing * (variables.len() as u16 - 1)),
                     ),
             )
             .unwrap();
         solver.add_constraints(&ccs).unwrap();
+        // TODO: Figure out why if there is a large number of columns solver.fetch_changes()
+        // returns a different value for the last column than all of the other columns
         let mut solved_widths = vec![0; variables.len()];
         for &(var, value) in solver.fetch_changes() {
             let index = var_indices[&var];
@@ -215,6 +221,17 @@ where
             solved_widths[index] = value
         }
 
+        // let mut x = 0;
+        // let mut widths = Vec::with_capacity(self.widths.len());
+        // for width_percentage in self.widths.iter() {
+        //     let width = ((*width_percentage as f32 * 0.01) * table_area.width as f32) as u16;
+        //     if x + width < table_area.width {
+        //         widths.push(width);
+        //     }
+        //     x += width;
+        // }
+
+
         let mut y = table_area.top();
         let mut x = table_area.left();
 
@@ -222,21 +239,49 @@ where
         if y < table_area.bottom() {
             for (w, t) in solved_widths.iter().zip(self.header.by_ref()) {
                 buf.set_stringn(
-                    x + self.column_spacing,
+                    x + self.column_spacing + 1,
                     y + 1,
                     format!("{}", t),
                     *w as usize,
                     self.header_style,
                 );
-                x += *w + self.column_spacing + 2;
+                x += *w + self.column_spacing;
             }
         }
-        y += 4;
+        // Draw all three horiztonal lines, An above header line, a below header line, and a bottom of the table line
+        for x1 in table_area.left()..table_area.right() {
+            buf.get_mut(x1, table_area.top())
+                .set_symbol(line::HORIZONTAL);
+            buf.get_mut(x1, table_area.top() + 2)
+                .set_symbol(line::HORIZONTAL);
+            buf.get_mut(x1, table_area.bottom() - 1)
+                .set_symbol(line::HORIZONTAL);
+        }
+
+        // Increment y to be beneath an horizontal line
+        // Empty row + horizontal line + empty row = 3
+
+        for y1 in table_area.top()..table_area.bottom() {
+            if y1 == table_area.top() + 2 {
+                buf.get_mut(table_area.right() - 1, y1)
+                    .set_symbol(line::VERTICAL_LEFT);
+                buf.get_mut(table_area.left(), y1)
+                    .set_symbol(line::VERTICAL_RIGHT);
+            }
+            else {
+                buf.get_mut(table_area.right() - 1, y1)
+                    .set_symbol(line::VERTICAL);
+                buf.get_mut(table_area.left(), y1)
+                    .set_symbol(line::VERTICAL);
+            }
+        }
+
+        y += 3;
 
         // Draw rows
         let default_style = Style::default();
         if y < table_area.bottom() {
-            let remaining = (table_area.bottom() - y) as usize;
+            let remaining = (table_area.bottom() - y - 1) as usize;
 
             for (i, row) in self.rows.by_ref().take(remaining).enumerate() {
                 let (data, style) = match row {
@@ -245,39 +290,41 @@ where
                 };
                 x = table_area.left();
 
-                for x in table_area.left()..table_area.right() {
-                    buf.get_mut(x, table_area.top())
-                        .set_symbol(line::HORIZONTAL);
-                }
-                for x in table_area.left()..table_area.right() {
-                    buf.get_mut(x, table_area.top() + y - 2)
-                        .set_symbol(line::HORIZONTAL);
-                }
-                for y in table_area.top()..table_area.bottom() {
-                    buf.get_mut(table_area.right() - 1, y)
-                        .set_symbol(line::VERTICAL);
-                }
-                for x in table_area.left()..table_area.right() {
-                    buf.get_mut(x, table_area.bottom() - 1)
-                        .set_symbol(line::HORIZONTAL);
-                }
-
                 for (w, elt) in solved_widths.iter().zip(data) {
-                    // Draw Border sides
-                    // Draw border Corners
-                    for y in table_area.top()..table_area.bottom() {
-                        buf.get_mut(table_area.left() + x, y)
-                            .set_symbol(line::VERTICAL);
+                    // Draw the verticle line between columns
+                    if x > 0 {
+                        for y in table_area.top()..table_area.bottom(){
+                            if y == table_area.top() {
+                                buf.get_mut(table_area.left() + x, y)
+                                    .set_symbol(line::HORIZONTAL_DOWN);
+                            }
+                            else if y == table_area.bottom() - 1 {
+                                buf.get_mut(table_area.left() + x, y)
+                                    .set_symbol(line::HORIZONTAL_UP);
+                            }
+                            else if y == table_area.top() + 2 {
+                                buf.get_mut(table_area.left() + x, y)
+                                    .set_symbol(line::CROSS);
+                            }
+                            else {
+                                buf.get_mut(table_area.left() + x, y)
+                                    .set_symbol(line::VERTICAL);
+                            }
+                        }
                     }
 
+                    // We begin writing text two characters after the column begins
+                    // This leaves space for the vertical line separator and an empty
+                    // space in front of it
                     buf.set_stringn(
                         x + 2,
-                        y - 1 + i as u16,
+                        y + i as u16,
                         format!("{}", elt),
                         *w as usize,
                         style,
                     );
-                    x += *w + self.column_spacing + 2;
+                    // Move the x position to the beginning of the next column
+                    x += *w + self.column_spacing;
                 }
             }
             // Draw Table corners

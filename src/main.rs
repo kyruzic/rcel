@@ -3,7 +3,7 @@ mod csv_utils;
 mod widgets;
 
 use std::io;
-use std::iter::Iterator;
+use std::iter;
 
 use termion::event::Key;
 use termion::raw::IntoRawMode;
@@ -25,11 +25,17 @@ where
     // Getting data
     let csv_rows = csv_utils::read_csv_to_rows().unwrap();
     let headers = csv_utils::return_csv_headers();
-
+    let num_columns = headers.len();
+    let width = 100/ num_columns as u16;
 
     let rows = csv_rows.iter().map(|values| {
         Row::Data(values.iter())
     });
+
+    let width_constraints = iter::repeat(width)
+        .take(num_columns)
+        .map(|w| Constraint::Percentage(w))
+        .collect::<Vec<Constraint>>();
 
     // Rendering data
     let size = f.size();
@@ -39,22 +45,9 @@ where
             headers.iter(),
             rows.into_iter()
         )
-        .widths(&[
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-            Constraint::Length(10),
-        ])
+        .widths(& width_constraints)
         .style(Style::default().fg(Color::White))
-        .column_spacing(2)
         .render(f, size);
-
 }
 
 fn main() {
